@@ -61,9 +61,12 @@ public class ChatController {
 	}
 	
 	private void checkProfanityAndSanitize(ChatMessage message) {
+		System.out.println("message --> " + message.getMessage());
 		long profanityLevel = profanityFilter.getMessageProfanity(message.getMessage());
 		profanity.increment(profanityLevel);
-		message.setMessage(profanityFilter.filter(message.getMessage()));
+		String messageText = profanityFilter.filter(message.getMessage());
+		System.out.println("message --> " + messageText);
+		message.setMessage(messageText);
 	}
 	
 	@MessageExceptionHandler

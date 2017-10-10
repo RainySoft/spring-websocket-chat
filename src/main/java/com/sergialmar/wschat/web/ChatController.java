@@ -3,6 +3,8 @@ package com.sergialmar.wschat.web;
 import java.security.Principal;
 import java.util.Collection;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
@@ -27,48 +29,52 @@ import com.sergialmar.wschat.util.ProfanityChecker;
  */
 @Controller
 public class ChatController {
+	private final static Logger logger = LoggerFactory.getLogger(ChatController.class);
 
-	@Autowired private ProfanityChecker profanityFilter;
-	
-	@Autowired private SessionProfanity profanity;
-	
-	@Autowired private ParticipantRepository participantRepository;
-	
-	@Autowired private SimpMessagingTemplate simpMessagingTemplate;
-	
-	
+	@Autowired
+	private ProfanityChecker profanityFilter;
+
+	@Autowired
+	private SessionProfanity profanity;
+
+	@Autowired
+	private ParticipantRepository participantRepository;
+
+	@Autowired
+	private SimpMessagingTemplate simpMessagingTemplate;
+
 	@SubscribeMapping("/chat.participants")
 	public Collection<LoginEvent> retrieveParticipants() {
 		return participantRepository.getActiveSessions().values();
 	}
-	
+
 	@MessageMapping("/chat.message")
 	public ChatMessage filterMessage(@Payload ChatMessage message, Principal principal) {
 		checkProfanityAndSanitize(message);
-		
+
 		message.setUsername(principal.getName());
-		
+
 		return message;
 	}
-	
+
 	@MessageMapping("/chat.private.{username}")
-	public void filterPrivateMessage(@Payload ChatMessage message, @DestinationVariable("username") String username, Principal principal) {
+	public void filterPrivateMessage(@Payload ChatMessage message, @DestinationVariable("username") String username,
+			Principal principal) {
 		checkProfanityAndSanitize(message);
-		
+
 		message.setUsername(principal.getName());
 
 		simpMessagingTemplate.convertAndSend("/user/" + username + "/exchange/amq.direct/chat.message", message);
 	}
-	
+
 	private void checkProfanityAndSanitize(ChatMessage message) {
-		System.out.println("message --> " + message.getMessage());
+		logger.info("message sender={}\r\n\t message content={}", message.getUsername(),message.getMessage());
 		long profanityLevel = profanityFilter.getMessageProfanity(message.getMessage());
 		profanity.increment(profanityLevel);
 		String messageText = profanityFilter.filter(message.getMessage());
-		System.out.println("message --> " + messageText);
 		message.setMessage(messageText);
 	}
-	
+
 	@MessageExceptionHandler
 	@SendToUser(value = "/exchange/amq.direct/errors", broadcast = false)
 	public String handleProfanity(TooMuchProfanityException e) {
